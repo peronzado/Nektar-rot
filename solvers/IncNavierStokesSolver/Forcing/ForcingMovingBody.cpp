@@ -370,17 +370,6 @@ void ForcingMovingBody::v_Apply(
             else
             {         
             
-              
-        	  
-            
-            //NekDouble x = m_MotionVars[0][0];
-            //NekDouble y = m_MotionVars[1][0];
-            //NekDouble ddx = m_MotionVars[0][2];
-            //NekDouble ddy = m_MotionVars[1][2];
-            //NekDouble theta = m_MotionVars[2][0];
-            //NekDouble dtheta = m_MotionVars[2][1];
-            //NekDouble ddtheta = m_MotionVars[2][2];
-
             NekDouble sin = m_MotionVars[2][0] - ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(3*2*1)) + ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(5*4*3*2*1));
             NekDouble cos = 1 - ((m_MotionVars[2][0]*m_MotionVars[2][0])/(2*1)) + ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(4*3*2*1)); 
             
@@ -1434,19 +1423,21 @@ void ForcingMovingBody::MappingBndConditions(
     m_baseflow = Array<OneD, Array<OneD, NekDouble> >(2);
     int nbnds    = pFields[0]->GetBndConditions().size();
     for (int n = 0; n < nbnds; ++n)
-    {
+    { 
         
-        for ( int dim = 0; dim < m_motion.size(); dim++)
+        if (m_vdim != 3)
         {
+            for ( int dim = 0; dim < m_motion.size()-1; dim++)
+            {
+           
+                BndConds   = pFields[dim]->GetBndConditions();
+                BndExp     = pFields[dim]->GetBndCondExpansions();
             
-            BndConds   = pFields[dim]->GetBndConditions();
-            BndExp     = pFields[dim]->GetBndCondExpansions();
-            
-            MultiRegions::ExpListSharedPtr                   locExpList;
-            locExpList = BndExp[n];
+                MultiRegions::ExpListSharedPtr                   locExpList;
+                locExpList = BndExp[n];
                    
-            if (BndConds[n]->GetUserDefined() =="MovingBody")
-            {   
+                if (BndConds[n]->GetUserDefined() =="MovingBody")
+                {   
                 
                 
                 
@@ -1456,6 +1447,8 @@ void ForcingMovingBody::MappingBndConditions(
                 Array<OneD, NekDouble> x1(nPts, 0.0);
                 Array<OneD, NekDouble> x2(nPts, 0.0);
                 Array<OneD, NekDouble> tmp(nPts,0.0);
+                Array<OneD, NekDouble> thetax0(nPts,0.0);
+                Array<OneD, NekDouble> thetax1(nPts,0.0);
                 NekDouble x2_in =0.;
                 // Homogeneous input case for x2.
                 if (x2_in == NekConstants::kNekUnsetDouble)
@@ -1466,9 +1459,10 @@ void ForcingMovingBody::MappingBndConditions(
                 {
                     BndExp[n]->GetCoords(x0, x1, x2);
                     Vmath::Fill(nPts, x2_in, x2, 1);
+                    
                 }
 
-                
+                                
                 LibUtilities::Equation condition =
                 std::static_pointer_cast<
                     SpatialDomains::DirichletBoundaryCondition>
@@ -1502,12 +1496,15 @@ void ForcingMovingBody::MappingBndConditions(
                 else
                 {
 
-                    Vmath::Fill(nPts, m_MotionVars[dim][1], tmp, 1);
+                    
 
-                    Vmath::Vsub(nPts, BndExp[n]->UpdatePhys(), 1,
+                     Vmath::Fill(nPts, m_MotionVars[dim][1], tmp, 1);
+
+                     Vmath::Vsub(nPts, BndExp[n]->UpdatePhys(), 1,
                                                  tmp,                          1,
                                                  BndExp[n]->UpdatePhys(), 1);               
-                                      
+
+
     
                 }
 
@@ -1515,12 +1512,177 @@ void ForcingMovingBody::MappingBndConditions(
                 // Update coefficients at the boundary
                 BndExp[n]->FwdTrans_BndConstrained(BndExp[n]->GetPhys(),
                                                 BndExp[n]->UpdateCoeffs());
-                                                
+                                           
                                                 
               
             }
             
+
+            
+        
+            }
         }
+        if (m_vdim == 3)
+        {
+            for ( int dim = 0; dim < m_motion.size()-1; dim++)
+            {
+
+                BndConds   = pFields[dim]->GetBndConditions();
+                BndExp     = pFields[dim]->GetBndCondExpansions();
+                if (BndConds[n]->GetUserDefined() =="RotationNeumann")
+            {
+                
+                NekDouble sin = m_MotionVars[2][0] - ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(3*2*1)) + ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(5*4*3*2*1));
+                NekDouble cos = 1 - ((m_MotionVars[2][0]*m_MotionVars[2][0])/(2*1)) + ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(4*3*2*1)); 
+
+                int nPts = BndExp[n]->GetTotPoints();
+                Array<OneD, NekDouble> x0(nPts, 0.0);
+                Array<OneD, NekDouble> x1(nPts, 0.0);
+                Array<OneD, NekDouble> x2(nPts, 0.0);
+                Array<OneD, NekDouble> tmp(nPts,0.0);
+                NekDouble x2_in =0.;
+                if (x2_in == NekConstants::kNekUnsetDouble)
+                 {
+                   BndExp[n]->GetCoords(x0,x1,x2);
+                 }
+                else
+                 {
+                   BndExp[n]->GetCoords(x0, x1, x2);
+                   Vmath::Fill(nPts, x2_in, x2, 1);
+                    
+                 }                                
+                   LibUtilities::Equation condition =
+                    std::static_pointer_cast<
+                        SpatialDomains::NeumannBoundaryCondition>
+                            (BndConds[n])-> m_neumannCondition;
+                                    condition.Evaluate(x0, x1, x2, time,
+                                        BndExp[n]->UpdatePhys());
+
+                        
+                        
+                    if (dim == 0)
+                    {
+                        NekDouble thetasin = m_MotionVars[2][1] * sin;
+                        Vmath::Sadd(nPts, thetasin, BndExp[n]->UpdatePhys(),1,BndExp[n]->UpdatePhys(),1);
+                    }
+                    else if (dim == 1)
+                    {
+                        NekDouble thetacos = m_MotionVars[2][1] * cos;
+                        Vmath::Sadd(nPts, thetacos, BndExp[n]->UpdatePhys(),1,BndExp[n]->UpdatePhys(),1);
+                    }
+            
+                
+                
+
+                // Update coefficients at the boundary
+                BndExp[n]->FwdTrans_BndConstrained(BndExp[n]->GetPhys(),
+                                                BndExp[n]->UpdateCoeffs());
+
+
+
+            }
+            
+                if (BndConds[n]->GetUserDefined() =="MovingBody")
+                {
+                    int nPts = BndExp[n]->GetTotPoints();
+                    Array<OneD, NekDouble> ucos(nPts,0.0);
+                    Array<OneD, NekDouble> usin(nPts,0.0);
+                    Array<OneD, NekDouble> vcos(nPts,0.0);
+                    Array<OneD, NekDouble> vsin(nPts,0.0);
+                    Array<OneD, NekDouble> ucosmvsin(nPts,0.0);
+                    Array<OneD, NekDouble> usinpvcos(nPts,0.0);
+                    Array<OneD, NekDouble> x0(nPts, 0.0);
+                    Array<OneD, NekDouble> x1(nPts, 0.0);
+                    Array<OneD, NekDouble> x2(nPts, 0.0);
+                    Array<OneD, NekDouble> tmp(nPts,0.0);
+                    Array<OneD, NekDouble> thetax0(nPts,0.0);
+                    Array<OneD, NekDouble> thetax1(nPts,0.0);
+                    Array<OneD, const NekDouble> u(nPts);
+                    Array<OneD, const NekDouble> v(nPts);
+                    u = pFields[0]->GetPhys();
+                    v = pFields[1]->GetPhys();
+                    
+
+                    for ( int dim = 0; dim < m_motion.size()-1; dim++)  
+                    {
+                
+                        BndConds   = pFields[dim]->GetBndConditions();
+                        BndExp     = pFields[dim]->GetBndCondExpansions();
+                        MultiRegions::ExpListSharedPtr                   locExpList;
+                        locExpList = BndExp[n];
+                        
+
+                        NekDouble x2_in =0.;
+                        // Homogeneous input case for x2.
+                        if (x2_in == NekConstants::kNekUnsetDouble)
+                        {
+                        BndExp[n]->GetCoords(x0,x1,x2);
+                        }
+                        else
+                        {
+                            BndExp[n]->GetCoords(x0, x1, x2);
+                            Vmath::Fill(nPts, x2_in, x2, 1);
+                        
+                        }
+
+                                    
+                        LibUtilities::Equation condition =
+                        std::static_pointer_cast<
+                            SpatialDomains::DirichletBoundaryCondition>
+                                (BndConds[n])->
+                                    m_dirichletCondition;
+                        condition.Evaluate(x0, x1, x2, time,
+                                                BndExp[n]->UpdatePhys());    
+
+                
+
+                        NekDouble sin = m_MotionVars[2][0] - ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(3*2*1)) + ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(5*4*3*2*1));
+                        NekDouble cos = 1 - ((m_MotionVars[2][0]*m_MotionVars[2][0])/(2*1)) + ((m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0]*m_MotionVars[2][0])/(4*3*2*1)); 
+                    
+                        Vmath::Smul(nPts, m_MotionVars[2][1], x1, 1, thetax1, 1);
+                        Vmath::Smul(nPts, m_MotionVars[2][1], x0, 1, thetax0, 1);
+                        
+                        
+                    
+
+                        
+                        Vmath::Smul(nPts, cos, u, 1, ucos, 1);
+                        Vmath::Smul(nPts, sin, u, 1, usin, 1);
+                        
+                        Vmath::Smul(nPts, sin, v, 1, vsin, 1);
+                        Vmath::Smul(nPts, cos, v, 1, vcos, 1);
+
+                        Vmath::Vsub(nPts, ucos, 1, vsin,1,  ucosmvsin, 1);
+                        Vmath::Vadd(nPts, usin, 1, vcos,1,  usinpvcos, 1);
+                    }
+                
+
+                    for ( int dim1 = 0; dim1 < m_motion.size()-1; dim1++)
+                    {
+                        if (dim1 == 0)
+                        {                               
+                            Vmath::Vsub(nPts, ucosmvsin, 1, thetax1, 1, BndExp[n]->UpdatePhys(), 1);
+                                    
+                        }
+                        if (dim1 == 1)
+                        {
+                                
+                                    
+                            Vmath::Vadd(nPts, usinpvcos, 1, thetax0, 1, BndExp[n]->UpdatePhys(), 1);
+                                    
+
+                        }
+                        // Update coefficients at the boundary
+                        BndExp[n]->FwdTrans_BndConstrained(BndExp[n]->GetPhys(),
+                                                                BndExp[n]->UpdateCoeffs());
+                    }
+                }
+
+            
+            
+            }
+        }       
+
 
     }
 
