@@ -1422,12 +1422,14 @@ void ForcingMovingBody::MappingBndConditions(
     Array<OneD, const SpatialDomains::BoundaryConditionShPtr> BndConds;
     m_baseflow = Array<OneD, Array<OneD, NekDouble> >(2);
     int nbnds    = pFields[0]->GetBndConditions().size();
+    
+    cout << m_vdim << endl;
     for (int n = 0; n < nbnds; ++n)
     { 
         
         if (m_vdim != 3)
         {
-            for ( int dim = 0; dim < m_motion.size()-1; dim++)
+            for ( int dim = 0; dim < m_motion.size(); dim++)
             {
            
                 BndConds   = pFields[dim]->GetBndConditions();
@@ -1450,6 +1452,7 @@ void ForcingMovingBody::MappingBndConditions(
                 Array<OneD, NekDouble> thetax0(nPts,0.0);
                 Array<OneD, NekDouble> thetax1(nPts,0.0);
                 NekDouble x2_in =0.;
+                
                 // Homogeneous input case for x2.
                 if (x2_in == NekConstants::kNekUnsetDouble)
                 {
@@ -1502,7 +1505,7 @@ void ForcingMovingBody::MappingBndConditions(
 
                      Vmath::Vsub(nPts, BndExp[n]->UpdatePhys(), 1,
                                                  tmp,                          1,
-                                                 BndExp[n]->UpdatePhys(), 1);               
+                                                BndExp[n]->UpdatePhys(), 1);               
 
 
     
@@ -1524,7 +1527,7 @@ void ForcingMovingBody::MappingBndConditions(
         }
         if (m_vdim == 3)
         {
-            for ( int dim = 0; dim < m_motion.size()-1; dim++)
+            for ( int dim = 0; dim < m_motion.size(); dim++)
             {
 
                 BndConds   = pFields[dim]->GetBndConditions();
@@ -1582,7 +1585,7 @@ void ForcingMovingBody::MappingBndConditions(
 
             }
             
-                if (BndConds[n]->GetUserDefined() =="MovingBody")
+                else if (BndConds[n]->GetUserDefined() =="MovingBody")
                 {
                     int nPts = BndExp[n]->GetTotPoints();
                     Array<OneD, NekDouble> ucos(nPts,0.0);
@@ -1602,8 +1605,9 @@ void ForcingMovingBody::MappingBndConditions(
                     u = pFields[0]->GetPhys();
                     v = pFields[1]->GetPhys();
                     
+                    
 
-                    for ( int dim = 0; dim < m_motion.size()-1; dim++)  
+                    for ( int dim = 0; dim < m_motion.size(); dim++)  
                     {
                 
                         BndConds   = pFields[dim]->GetBndConditions();
@@ -1657,7 +1661,7 @@ void ForcingMovingBody::MappingBndConditions(
                     }
                 
 
-                    for ( int dim1 = 0; dim1 < m_motion.size()-1; dim1++)
+                    for ( int dim1 = 0; dim1 < m_motion.size(); dim1++)
                     {
                         if (dim1 == 0)
                         {                               
@@ -1673,6 +1677,8 @@ void ForcingMovingBody::MappingBndConditions(
 
                         }
                         // Update coefficients at the boundary
+                        
+                        
                         BndExp[n]->FwdTrans_BndConstrained(BndExp[n]->GetPhys(),
                                                                 BndExp[n]->UpdateCoeffs());
                     }
