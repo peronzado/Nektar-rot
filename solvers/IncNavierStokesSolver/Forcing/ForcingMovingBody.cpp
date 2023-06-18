@@ -83,10 +83,10 @@ void ForcingMovingBody::v_InitObject(
     // the motion is determined by an equation or is from a file.(not Nektar++)
     // check if we need to load a file or we have an equation
     
-    CheckIsFromFile(pForce);// se nao for xml
+    CheckIsFromFile(pForce);
 
     // Initialise movingbody filter
-    InitialiseFilter(m_session, pFields, pForce);//inicializa o filtermovingbody
+    InitialiseFilter(m_session, pFields, pForce);
     
     // Initialise the cable model
 
@@ -127,6 +127,7 @@ void ForcingMovingBody::v_InitObject(
 
     m_zta = Array<OneD, Array< OneD, NekDouble> > (3);
     m_eta = Array<OneD, Array< OneD, NekDouble> > (3);
+    m_delta = Array<OneD, Array< OneD, NekDouble> > (3);
     m_force = Array<OneD, Array<OneD,NekDouble> > (m_intSteps);
     m_force1 = Array<OneD, Array<OneD,NekDouble> > (m_intSteps);
     m_velocity     = Array<OneD, Array<OneD,NekDouble> > (m_intSteps);
@@ -179,14 +180,29 @@ void ForcingMovingBody::v_Apply(
     
     NekDouble aux0, aux1;
     std::string evol_operator = m_session->GetSolverInfo("EvolutionOperator");
-    SolverUtils::DriverModifiedArnoldi::ReturnStructVector(aux0, aux1, c);
+    SolverUtils::DriverArnoldi::ReturnStructVector(aux0, aux1, c);
     std::string driver = m_session->GetSolverInfo("Driver");
+    int       tot_step = m_session->GetParameter("NumSteps");
     
-    if(c==0 && time==0 && boost::iequals(driver, "ModifiedArnoldi"))
+    int num_step = time/m_timestep;
+    if((c==0 && time==0 && boost::iequals(driver, "ModifiedArnoldi")) ||
+     (c==0 &&  (num_step)%(tot_step)==0 && boost::iequals(driver, "Arpack")))
     {
+
+        if(m_vdim != 3)
+        {
+            m_MotionVars[1][0] = aux0;
+            m_MotionVars[1][1] = aux1;
+
+        }
+        else
+        {
+            m_MotionVars[2][0] = aux0;
+            m_MotionVars[2][1] = aux1;
+
+        }
         
-        m_MotionVars[1][0] = aux0;
-        m_MotionVars[1][1] = aux1;
+
         
 
     }
@@ -421,8 +437,19 @@ void ForcingMovingBody::v_Apply(
         
     }
 
-    SolverUtils::DriverModifiedArnoldi::GetStructVector(m_MotionVars[1][0], m_MotionVars[1][1]);
+    if(m_vdim != 3)
+    {
+    	SolverUtils::DriverArnoldi::GetStructVector(m_MotionVars[1][0], m_MotionVars[1][1]);
+
+
+    }
+    else
+    {
     
+        SolverUtils::DriverArnoldi::GetStructVector(m_MotionVars[2][0], m_MotionVars[2][1]);
+    
+    }
+
 }
 
 
@@ -579,7 +606,7 @@ void ForcingMovingBody::v_Apply(
             // only consider second order approximation for fictitious variables
             int  intOrder= 2;
             int  nint    = min(m_movingBodyCalls+1,intOrder);
-            int  nlevels = m_fV[0].size();
+            int  nlevels = 2;
         
             for(int i = 0; i < m_motion.size(); ++i)
             {
@@ -637,8 +664,10 @@ void ForcingMovingBody::v_Apply(
       
             if (comp==0. && (boost::iequals(evol_operator, "Adjoint") & boost::iequals(evol_operator, "Direct")))
             {   
-                m_structstiff = m_structstiff - m_Aeroforces[2 + cn];
+                m_structstiff = m_structstiff - m_Aeroforces[3+cn];
                 SetDynEqCoeffMatrix(pFields,cn);
+                
+
                
             }
             ++comp;
@@ -650,14 +679,30 @@ void ForcingMovingBody::v_Apply(
         }
         else
         {
-            
-         std::string evol_operator = m_session->GetSolverInfo("EvolutionOperator");
+        
+        	  int cn = 2;
+        	  
+            /*std::string evol_operator = m_session->GetSolverInfo("EvolutionOperator");
       
-            int cn = 2;
-            ++comp;
+            if (comp==0. && (boost::iequals(evol_operator, "Adjoint") & boost::iequals(evol_operator, "Direct")))
+            {   
+                
+                m_structstiff = m_structstiff - m_Aeroforces[3+cn];
 
-                                   
-            StructureSolver(pFields, cn, fces[cn], m_MotionVars[cn]);                    
+                SetDynEqCoeffMatrix(pFields,cn);   
+
+                       
+                
+                
+
+               
+            }*/
+            
+            ++comp;
+                           
+            StructureSolver(pFields, cn, fces[cn], m_MotionVars[cn]);
+
+               
             
 
         }
@@ -853,11 +898,18 @@ void ForcingMovingBody::StructureSolver(
         {
             tmp0[var] = BodyMotions[var];
         }
+        
 
-            
-    
+
         
         tmp2[0] = m_Aeroforces[cn];
+        
+        //cout << "Aeroforces[2] = " << m_Aeroforces[2] << endl;
+
+          
+    
+        
+        
         
         if(m_vdim != 3)
         {
@@ -1133,13 +1185,21 @@ void ForcingMovingBody::InitialiseCableModel(
         NekDouble fictrho, fictdamp;
         m_session->LoadParameter("FictMass", fictrho);
         m_session->LoadParameter("FictDamp", fictdamp);
+        if(m_vdim != 3)
+        {
         m_structrho  += fictrho;
         m_structdamp += fictdamp;
+        }
+        else
+        {
+            m_angular_structrho += fictrho;
+            m_angular_structdamp += fictdamp;
+        }
 
         // Storage array of Struct Velocity and Acceleration used for
         // extrapolation of fictitious force
-        m_fV = Array<OneD, Array<OneD, Array<OneD, NekDouble> > > (2);
-        m_fA = Array<OneD, Array<OneD, Array<OneD, NekDouble> > > (2);
+        m_fV = Array<OneD, Array<OneD, Array<OneD, NekDouble> > > (3);
+        m_fA = Array<OneD, Array<OneD, Array<OneD, NekDouble> > > (3);
         for (int i = 0; i < m_motion.size(); ++i)
         {
             m_fV[i] = Array<OneD, Array<OneD, NekDouble> > (2);
@@ -1419,14 +1479,14 @@ void ForcingMovingBody::MappingBndConditions(
     std::string driver = m_session->GetSolverInfo("Driver");
     // Declare variables
     Array<OneD, MultiRegions::ExpListSharedPtr> BndExp;
-    Array<OneD, const SpatialDomains::BoundaryConditionShPtr> BndConds;
-    m_baseflow = Array<OneD, Array<OneD, NekDouble> >(2);
+    Array<OneD, const SpatialDomains::BoundaryConditionShPtr> BndConds;    
     int nbnds    = pFields[0]->GetBndConditions().size();
     for (int n = 0; n < nbnds; ++n)
     { 
         
         if (m_vdim != 3)
         {
+            m_baseflow = Array<OneD, Array<OneD, NekDouble> >(2);
             for ( int dim = 0; dim < m_motion.size(); dim++)
             {
            
@@ -1436,7 +1496,7 @@ void ForcingMovingBody::MappingBndConditions(
                 MultiRegions::ExpListSharedPtr                   locExpList;
                 locExpList = BndExp[n];
                    
-                if (BndConds[n]->GetUserDefined() =="MovingBodyInlet")
+                if ((BndConds[n]->GetUserDefined() =="MovingBodyInlet")|| (BndConds[n]->GetUserDefined() =="StabilityWalls"))
                 {   
                 
                 
@@ -1473,7 +1533,7 @@ void ForcingMovingBody::MappingBndConditions(
                                         BndExp[n]->UpdatePhys());
 
                 if((boost::iequals(evol_operator, "Direct") || (boost::iequals(evol_operator, "TransientGrowth") && c==0)) 
-                && boost::iequals(driver, "ModifiedArnoldi"))
+                && (boost::iequals(driver, "ModifiedArnoldi") || boost::iequals(driver, "Arpack")))
                 {
                     m_baseflow[dim] = Array<OneD, NekDouble>(nPts, 0.0);
 
@@ -1525,8 +1585,8 @@ void ForcingMovingBody::MappingBndConditions(
         }
         if (m_vdim == 3)
         {
-
-             
+            m_baseflow = Array<OneD, Array<OneD, NekDouble> >(7); 
+            m_grad = Array<OneD, Array<OneD, NekDouble> >(2);
             for ( int dim = 0; dim < 2; dim++)        
             {
                 BndConds   = pFields[dim]->GetBndConditions();
@@ -1688,12 +1748,9 @@ void ForcingMovingBody::MappingBndConditions(
                 BndConds   = pFields[dim]->GetBndConditions();
                 BndExp     = pFields[dim]->GetBndCondExpansions();
                 MultiRegions::ExpListSharedPtr                   locExpList;
-                        locExpList = BndExp[n];
-            
-            if (BndConds[n]->GetUserDefined() =="MovingBodyInlet")
-                {
+                locExpList = BndExp[n];
+
                     int nPts = BndExp[n]->GetTotPoints();
-                    
                     Array<OneD, NekDouble> ucos(nPts,0.0);
                     Array<OneD, NekDouble> usin(nPts,0.0);
                     Array<OneD, NekDouble> vcos(nPts,0.0);
@@ -1701,13 +1758,176 @@ void ForcingMovingBody::MappingBndConditions(
                     Array<OneD, NekDouble> ucosmvsin(nPts,0.0);
                     Array<OneD, NekDouble> usinpvcos(nPts,0.0);
                     Array<OneD, NekDouble> x0(nPts, 0.0);
+                    Array<OneD, NekDouble> x0sq(nPts, 0.0);
                     Array<OneD, NekDouble> x1(nPts, 0.0);
-                    Array<OneD, NekDouble> x2(nPts, 0.0);
+                    Array<OneD, NekDouble> x1sq(nPts, 0.0);
+                    Array<OneD, NekDouble> x0sqpx1sq(nPts, 0.0);
+                    Array<OneD, NekDouble> pertvelu(nPts, 0.0);
+                    Array<OneD, NekDouble> pertvelv(nPts, 0.0);
+                    Array<OneD, NekDouble> thetadoty(nPts, 0.0);
+                    Array<OneD, NekDouble> thetadotx(nPts, 0.0);
+                    Array<OneD, NekDouble> thetadotycos(nPts, 0.0);
+                    Array<OneD, NekDouble> thetadotysin(nPts, 0.0);
+                    Array<OneD, NekDouble> thetadotxcos(nPts, 0.0);
+                    Array<OneD, NekDouble> thetadotxsin(nPts, 0.0);
+                    Array<OneD, NekDouble> grad(nPts, 0.0);
+                    Array<OneD, NekDouble> x2(nPts, 0.0);                   
+                    Array<OneD, NekDouble> gradx(nPts,0.0);
+                    Array<OneD, NekDouble> cosdux(nPts,0.0);
+                    Array<OneD, NekDouble> cosduy(nPts,0.0);
+                    Array<OneD, NekDouble> cosdvx(nPts,0.0);
+                    Array<OneD, NekDouble> cosdvy(nPts,0.0);
+                    Array<OneD, NekDouble> sindux(nPts,0.0);
+                    Array<OneD, NekDouble> sinduy(nPts,0.0);
+                    Array<OneD, NekDouble> sindvx(nPts,0.0);
+                    Array<OneD, NekDouble> sindvy(nPts,0.0);
+                    Array<OneD, NekDouble> grady(nPts,0.0);
+                    Array<OneD, NekDouble> thetax(nPts,0.0);
+                    Array<OneD, NekDouble> thetay(nPts,0.0);
                     Array<OneD, NekDouble> tmp(nPts,0.0);
+                    Array<OneD, NekDouble> temp(nPts,0.0);
+                    Array<OneD, NekDouble> temp2(nPts,0.0);
+                    Array<OneD, NekDouble> temp3(nPts,0.0);
                     Array<OneD, NekDouble> thetax0(nPts,0.0);
                     Array<OneD, NekDouble> thetax1(nPts,0.0);
                     Array<OneD, const NekDouble> u(nPts);
                     Array<OneD, const NekDouble> v(nPts);
+                    
+
+
+                        
+                if (BndConds[n]->GetUserDefined() =="StabilityWalls")                                 
+                {       
+                        NekDouble x2_in = 0.0;
+                        // Homogeneous input case for x2.
+                        if (x2_in == NekConstants::kNekUnsetDouble)
+                        {
+                        BndExp[n]->GetCoords(x0,x1,x2);
+                        }
+                        else
+                        {
+                            BndExp[n]->GetCoords(x0, x1, x2);
+                            Vmath::Fill(nPts, x2_in, x2, 1);
+                        
+                        }
+                        
+
+                                    
+                        LibUtilities::Equation condition =
+                        std::static_pointer_cast<
+                            SpatialDomains::DirichletBoundaryCondition>
+                                (BndConds[n])->
+                                    m_dirichletCondition;
+                        condition.Evaluate(x0, x1, x2, time,BndExp[n]->UpdatePhys()); 
+                
+                    if((boost::iequals(evol_operator, "Direct") || (boost::iequals(evol_operator, "TransientGrowth") && c==0)) 
+                && (boost::iequals(driver, "ModifiedArnoldi") || boost::iequals(driver, "Arpack")))
+                {
+                    
+                    m_grad[dim] = Array<OneD, NekDouble>(nPts, 0.0);
+
+                    string file = m_session->GetFunctionFilename("BaseFlow_BC", 0);
+                    int m_slices = 1;
+                    NekDouble sintheta = sin(m_MotionVars[2][0]);                   
+                    NekDouble costheta = cos(m_MotionVars[2][0]);
+                    
+                    int dux = 3;
+                    int duy = 4;
+                    int dvx = 5;
+                    int dvy = 6;
+
+                    m_baseflow[dux] = Array<OneD, NekDouble>(nPts, 0.0);
+                    m_baseflow[duy] = Array<OneD, NekDouble>(nPts, 0.0);
+                    m_baseflow[dvx] = Array<OneD, NekDouble>(nPts, 0.0);
+                    m_baseflow[dvy] = Array<OneD, NekDouble>(nPts, 0.0);
+
+
+                    ImportFldBase(file,locExpList, m_slices, dux);
+                    ImportFldBase(file,locExpList, m_slices, duy);
+                    ImportFldBase(file,locExpList, m_slices, dvx);
+                    ImportFldBase(file,locExpList, m_slices, dvy);
+
+
+                    Vmath::Smul(nPts, m_MotionVars[2][1], x1, 1, thetadoty, 1);
+                    Vmath::Smul(nPts, m_MotionVars[2][1], x0, 1, thetadotx, 1);
+                    Vmath::Smul(nPts, m_MotionVars[2][0], x1, 1, thetay, 1);
+                    Vmath::Smul(nPts, m_MotionVars[2][0], x0, 1, thetax, 1);
+                    Vmath::Smul(nPts, costheta, thetadoty, 1, thetadotycos, 1);
+                    Vmath::Smul(nPts, sintheta, thetadotx, 1, thetadotxsin, 1);
+                    Vmath::Smul(nPts, sintheta, thetadoty, 1, thetadotysin, 1);
+                    Vmath::Smul(nPts, costheta, thetadotx, 1, thetadotxcos, 1);
+
+                    Vmath::Smul(nPts, costheta, m_baseflow[dux], 1, cosdux, 1);
+                    Vmath::Smul(nPts, sintheta, m_baseflow[dux], 1, sindux, 1);
+                    Vmath::Smul(nPts, costheta, m_baseflow[duy], 1, cosduy, 1);
+                    Vmath::Smul(nPts, sintheta, m_baseflow[duy], 1, sinduy, 1);
+                    Vmath::Smul(nPts, costheta, m_baseflow[dvx], 1, cosdvx, 1);
+                    Vmath::Smul(nPts, sintheta, m_baseflow[dvx], 1, sindvx, 1);
+                    Vmath::Smul(nPts, costheta, m_baseflow[dvy], 1, cosdvy, 1);
+                    Vmath::Smul(nPts, sintheta, m_baseflow[dvy], 1, sindvy, 1);
+                    
+                    
+                    
+
+		
+
+
+                    
+
+                    if(dim == 0)
+                    {
+
+
+                        
+                        Vmath::Neg(nPts, thetadoty, 1);
+                        Vmath::Vmul(nPts, m_baseflow[duy], 1, x0,1,  temp2, 1);
+                        Vmath::Neg(nPts, temp2, 1);
+                        Vmath::Vmul(nPts, m_baseflow[dux], 1, x1,1,  temp3, 1);
+                        Vmath::Vadd(nPts, temp2,1,temp3,1,temp3, 1);
+                        Vmath::Smul(nPts, m_MotionVars[2][0],temp3 , 1, temp3, 1);
+                        //Vmath::Vadd(nPts, temp3,1,thetadoty,1,temp, 1);
+                        Vmath::Vadd(nPts, temp3,1,thetadoty,1,BndExp[n]->UpdatePhys(), 1);
+
+
+   
+                    }
+                    else if (dim == 1)
+                    {
+
+                        
+                  	    Vmath::Vmul(nPts, m_baseflow[dvy], 1, x0,1,  temp2, 1);
+                        Vmath::Neg(nPts, temp2, 1);
+                        Vmath::Vmul(nPts, m_baseflow[dvx], 1, x1,1,  temp3, 1);
+                        Vmath::Vadd(nPts, temp2,1,temp3,1,temp3, 1);
+                        Vmath::Smul(nPts, m_MotionVars[2][0],temp3 , 1, temp3, 1);
+                        Vmath::Vadd(nPts, temp3,1,thetadotx,1,BndExp[n]->UpdatePhys(), 1);
+
+
+                    }
+                    
+                                      
+                    
+                
+                    
+                   
+                    
+                    
+                    BndExp[n]->FwdTrans_BndConstrained(BndExp[n]->GetPhys(),BndExp[n]->UpdateCoeffs()); 
+
+                               
+                
+                
+                }
+
+
+
+                }
+
+
+            
+                if (BndConds[n]->GetUserDefined() =="MovingBodyInlet")
+                {
+                    
                     
 
 
@@ -1850,10 +2070,11 @@ std::string                                  pInfile,
 MultiRegions::ExpListSharedPtr            &locExpList,
         int                                          pSlice, int f)
 {
-    std::vector<LibUtilities::FieldDefinitionsSharedPtr> FieldDef;
+    /*std::vector<LibUtilities::FieldDefinitionsSharedPtr> FieldDef;
     std::vector<std::vector<NekDouble> >                 FieldData;
 
     int nqtot = m_baseflow[0].size();
+    
 
     Array<OneD, NekDouble> tmp_coeff(locExpList->GetNcoeffs(), 0.0);
     Array<OneD, NekDouble> tmp_coeff1(locExpList->GetNcoeffs(), 0.0);
@@ -1885,6 +2106,67 @@ MultiRegions::ExpListSharedPtr            &locExpList,
                             tmp_coeff);
 
     }
+ 
+    locExpList->BwdTrans(tmp_coeff, m_baseflow[f]);*/
+
+
+
+
+
+
+
+
+
+    std::vector<LibUtilities::FieldDefinitionsSharedPtr> FieldDef;
+    std::vector<std::vector<NekDouble> >                 FieldData;
+
+    int nqtot = m_baseflow[3].size();
+    
+   
+
+    Array<OneD, NekDouble> tmp_coeff(locExpList->GetNcoeffs(), 0.0);
+    Array<OneD, NekDouble> tmp_coeff1(locExpList->GetNcoeffs(), 0.0);
+
+    LibUtilities::FieldIOSharedPtr fld = LibUtilities::FieldIO::CreateForFile(
+                                                m_session, pInfile);
+
+    //cout << "FieldDef.size() = " << FieldDef.size() << endl;
+
+    fld->Import(pInfile, FieldDef, FieldData);
+    
+
+    int nSessionConvVar = 1;
+    int nFileVar        = FieldDef[0]->m_fields.size();
+    int nFileConvVar    = nFileVar - 1; // Ignore pressure
+
+
+    
+    int v ;
+    if (m_vdim != 3)
+    {
+        v = f*2 + 4;
+    }
+    else{
+        v = f;
+    }
+    
+    for(int i = 0; i < FieldDef.size(); ++i)
+    {
+        bool flag = FieldDef[i]->m_fields[0] ==
+            m_session->GetVariable(0);
+
+        ASSERTL0(flag, (std::string("Order of ") + pInfile
+                        + std::string(" data and that defined in "
+                        "the session file differs")).c_str());
+
+        locExpList->ExtractDataToCoeffs(
+                            FieldDef[i],
+                            FieldData[i],
+                            FieldDef[i]->m_fields[v],
+                            tmp_coeff);
+
+    }
+    
  
     locExpList->BwdTrans(tmp_coeff, m_baseflow[f]);
 

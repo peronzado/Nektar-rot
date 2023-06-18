@@ -52,9 +52,9 @@ std::string FilterMovingBody::className = SolverUtils::GetFilterFactory().
                                 FilterMovingBody::create,
                                 "Moving Body Filter");
 int aux;
-NekDouble bf_drag_t, bf_lift_t, bf_drag_p, bf_lift_p;
-NekDouble adj_drag_t, adj_lift_t, adj_drag_p, adj_lift_p;
-NekDouble bfgrad_drag_t, bfgrad_lift_t, bfgrad_drag_p, bfgrad_lift_p;
+NekDouble bf_drag_t, bf_lift_t, bf_drag_p, bf_lift_p, bf_moment_p, bf_moment_t;
+NekDouble adj_drag_t, adj_lift_t, adj_drag_p, adj_lift_p, adj_moment_p, adj_moment_t;
+NekDouble bfgrad_drag_t, bfgrad_lift_t, bfgrad_drag_p, bfgrad_lift_p, bfgrad_moment_p, bfgrad_moment_t;
 int counter = 0.;
 /**
  *
@@ -322,6 +322,17 @@ void FilterMovingBody::v_Initialise(
         // Getting the base flow fields
         string file = m_session->GetFunctionFilename("Baseflow", 0);
         ImportFldBound_base(file,pFields);
+        
+          /*for (int jj = 0; jj < nt; jj++)
+          {
+          for (int xx = 0; xx < dim+1; xx++)
+          {
+
+              cout << "m_baseflow[" <<  xx << "][" << jj << " = " << m_baseflow[xx][jj] <<  endl;
+
+          }
+          }*/
+        
     }
     
     
@@ -346,7 +357,7 @@ void FilterMovingBody::UpdateForce(
     m_session->MatchSolverInfo("Homogeneous", "1D",
                                m_isHomogeneous1D, false);
     NekDouble aux0, aux1;
-    SolverUtils::DriverModifiedArnoldi::ReturnStructVector(aux0, aux1, aux);
+    SolverUtils::DriverArnoldi::ReturnStructVector(aux0, aux1, aux);
     int n, cnt, elmtid, nq, offset, boundary;
     int nt  = pFields[0]->GetNpoints();
     int dim = pFields.size()-1;
@@ -1051,6 +1062,8 @@ void FilterMovingBody::UpdateForce(
                         coords[j] = Array<OneD, NekDouble>(nq, 0.0);
                     }
                     elmt->GetCoords(coords[0], coords[1], coords[2]);
+                    
+
 
                     for (int j = 0; j < 3; ++j)
                     {
@@ -1059,6 +1072,8 @@ void FilterMovingBody::UpdateForce(
                         // Subtract m_momPoint
                         Vmath::Sadd(nbc, -1.0*0, coordsb[j], 1, coordsb[j], 1);
                     }
+                    
+                    
 
                         
                     // Compute viscous tractive forces on wall from
@@ -1272,8 +1287,10 @@ void FilterMovingBody::UpdateForce(
                         Array<OneD, NekDouble> Pbgrady_base(nbc,0.0);
                         Array<OneD, NekDouble>  drag_t(nbc,0.0);
                         Array<OneD, NekDouble>  lift_t(nbc,0.0);
+                        Array<OneD, NekDouble>  moment_t(nbc,0.0);
                         Array<OneD, NekDouble>  drag_p(nbc,0.0);
                         Array<OneD, NekDouble>  lift_p(nbc,0.0);
+                        Array<OneD, NekDouble>  moment_p(nbc,0.0);
                         Array<OneD, NekDouble>  temp(nbc,0.0);
                         Array<OneD, NekDouble>  temp2(nbc,0.0);
                        // several vectors for computing the forces
@@ -1316,13 +1333,6 @@ void FilterMovingBody::UpdateForce(
                         
                        
 
-                        // float grad_v_adj [BndExp[n]->GetExpSize()*nbc] = {0.0508126, 0.0486929, 0.0451134, 0.0402479, 0.0343174, 0.0275738, 0.0202861, 0.0319774, 0.0382198, 0.043545, 0.0476424, 0.0502913, 0.0513616, 0.0508126, 1.27432e-06, 0.00225652, 0.00637333, 0.0119015, 0.0183474, 0.0252034, 0.0319776, 0.0384948, 0.0258192, 0.0154393, 0.00761358, 0.00246565, -2.11802e-05, 1.39352e-06, 0.135915, 0.119997, 0.103161, 0.0859932, 0.0691006, 
-                        // 0.0530822, 0.0384947, 0.188346, 0.186021, 0.180963, 0.173218, 0.162937, 0.150381, 0.135915, 0.153083, 0.163561, 0.1726, 0.17988, 0.185099, 0.187992, 0.188346, 0.0761854, 0.0894994, 0.102858, 0.116114, 0.129069, 0.141484, 0.153083, -3.06556e-08, 0.0123332, 0.024744, 0.0373003, 0.050051, 0.0630174, 0.0761854, -0.0761853, -0.0630174, -0.050051, -0.0373003, -0.024744, -0.0123332, 3.06552e-08, -0.153082, -0.141484, -0.129068, -0.116113, -0.102858, -0.0894993, -0.0761853, -0.188344, -0.18799, -0.185097, -0.179878, -0.172599, -0.163561, -0.153082, -0.188344, -0.186018, -0.18096, -0.173214, -0.162933, -0.150376, -0.13591, -0.13591, -0.119992, -0.103156, -0.0859881, -0.0690957, -0.0530775, -0.0384904, -0.0384905, -0.0258154, -0.015436, -0.00761106, -0.00246393, 2.20547e-05, -1.394e-06, -1.27477e-06, -0.00225739, -0.00637504, -0.011904, -0.0183506, -0.0252072, -0.0319817, -0.0319816, -0.0382243, -0.0435497, -0.0476472, -0.050296, -0.0513661, -0.0508168, -0.0508168, -0.0486968, -0.0451169, -0.040251, -0.0343201, -0.0275761, -0.020288, -0.0202879, -0.0127377, -0.00518603, 0.00211478, 0.00893492, 0.0150735, 0.0203609, 0.020361, 0.0246566, 0.0278603, 0.0298998, 0.0307333, 0.0303497, 0.0287692, 0.0287693, 0.0260447, 0.0222705, 0.0175815, 0.0121557, 0.00621175, -4.53363e-08, 4.53328e-08, -0.00621175, -0.0121556, -0.0175814, -0.0222704, -0.0260445, -0.0287691, -0.0287691, -0.0303496, -0.0307332, -0.0298996, -0.0278602, -0.0246566, -0.0203611, -0.0203611, -0.0150737, -0.00893543, -0.00211556, 0.00518494, 0.0127362, 0.0202861}; 
-                        // for (int m = 0; m < nbc; m++)
-                        // {
-                        //     /* code */
-                        //     Pb_base[m] = Pb_base[m]*(0.016 + grad_v_adj[m + i*nbc]);
-                        // }
                         
                         // boundaries
                         Vmath::Vmul(nbc, Pb_base,       1, normals[0], 1, drag_p,    1);
@@ -1331,10 +1341,12 @@ void FilterMovingBody::UpdateForce(
                         //c) MOMENT TERMS
                     	 // pressure
                    	 Vmath::Zero(nbc, temp,  0.0);
-                    	 Vmath::Zero(nbc, temp2, 0.0);
+                    Vmath::Zero(nbc, temp2, 0.0);
+                    
+                    
 
-                    	 Vmath::Vmul (nbc, Pb_base, 1, normals[0], 1, temp, 1);
-                   	 Vmath::Vmul (nbc, Pb_base, 1, normals[1], 1, temp2, 1);
+                     Vmath::Vmul(nbc, Pb_base, 1, normals[0], 1, temp, 1);
+                   	 Vmath::Vmul(nbc, Pb_base, 1, normals[1], 1, temp2, 1);
 
                    	 Vmath::Vvtvp(nbc, temp2, 1, coordsb[0], 1, moment_p, 1, moment_p, 1);
                    	 Vmath::Vvtvm(nbc, temp,  1, coordsb[1], 1, moment_p, 1, moment_p, 1);
@@ -1343,7 +1355,7 @@ void FilterMovingBody::UpdateForce(
                   	 Vmath::Zero(nbc, temp,  0.0);
                   	 Vmath::Zero(nbc, temp2, 0.0);
 
-                    	 Vmath::Vmul(nbc, drag_t, 1, coordsb[1], 1, temp, 1);
+                     Vmath::Vmul(nbc, drag_t, 1, coordsb[1], 1, temp, 1);
                    	 Vmath::Vmul(nbc, lift_t, 1, coordsb[0], 1, temp2, 1);
                    	 Vmath::Smul(nbc, -1.0, temp2, 1, temp2, 1);
                    	 Vmath::Vadd(nbc, temp, 1, temp2, 1, moment_t, 1);        
@@ -1353,6 +1365,8 @@ void FilterMovingBody::UpdateForce(
                         bf_lift_t += bc->Integral(lift_t);
                         bf_drag_p += bc->Integral(drag_p);   
                         bf_lift_p += bc->Integral(lift_p);
+                        bf_moment_t += bc->Integral(moment_t);   
+                        bf_moment_p += bc->Integral(moment_p);
                         
 
                        
@@ -1422,23 +1436,23 @@ void FilterMovingBody::UpdateForce(
                         
                         ////c) MOMENT TERMS
                     	// // pressure
-                   	// Vmath::Zero(nbc, temp,  0.0);
-                    	// Vmath::Zero(nbc, temp2, 0.0);
+                   	     Vmath::Zero(nbc, temp,  0.0);
+                         Vmath::Zero(nbc, temp2, 0.0);
 
-                    	// Vmath::Vmul (nbc, Pbgradx_base, 1, normals[0], 1, temp, 1);
-                   	// Vmath::Vmul (nbc, Pbgradx_base 1, normals[1], 1, temp2, 1);
+                         Vmath::Vmul(nbc, Pbgradx_base, 1, normals[0], 1, temp, 1);
+                   	     Vmath::Vmul(nbc, Pbgrady_base, 1, normals[1], 1, temp2, 1);
 
-                   	// Vmath::Vvtvp(nbc, temp2, 1, coordsb[0], 1, moment_p, 1, moment_p, 1);
-                   	// Vmath::Vvtvm(nbc, temp,  1, coordsb[1], 1, moment_p, 1, moment_p, 1);
+                   	     Vmath::Vvtvp(nbc, temp2, 1, coordsb[0], 1, moment_p, 1, moment_p, 1);
+                   	     Vmath::Vvtvm(nbc, temp,  1, coordsb[1], 1, moment_p, 1, moment_p, 1);
 
-                  	// // viscous force
-                  	// Vmath::Zero(nbc, temp,  0.0);
-                  	// Vmath::Zero(nbc, temp2, 0.0);
+                  	    // viscous force
+                  	     Vmath::Zero(nbc, temp,  0.0);
+                  	     Vmath::Zero(nbc, temp2, 0.0);
 
-                    	// Vmath::Vmul(nbc, drag_t, 1, coordsb[1], 1, temp, 1);
-                   	// Vmath::Vmul(nbc, lift_t, 1, coordsb[0], 1, temp2, 1);
-                   	// Vmath::Smul(nbc, -1.0, temp2, 1, temp2, 1);
-                   	// Vmath::Vadd(nbc, temp, 1, temp2, 1, moment_t, 1);        
+                         Vmath::Vmul(nbc, drag_t, 1, coordsb[1], 1, temp, 1);
+                   	     Vmath::Vmul(nbc, lift_t, 1, coordsb[0], 1, temp2, 1);
+                   	     Vmath::Smul(nbc, -1.0, temp2, 1, temp2, 1);
+                   	     Vmath::Vadd(nbc, temp, 1, temp2, 1, moment_t, 1);        
                             
                         
 
@@ -1446,6 +1460,10 @@ void FilterMovingBody::UpdateForce(
                         bfgrad_lift_t += bc->Integral(lift_t);
                         bfgrad_drag_p += bc->Integral(drag_p);   
                         bfgrad_lift_p += bc->Integral(lift_p);
+                        bfgrad_moment_t += bc->Integral(moment_t);   
+                        bfgrad_moment_p += bc->Integral(moment_p);
+                        
+                        
                         
                       
 
@@ -1484,8 +1502,24 @@ void FilterMovingBody::UpdateForce(
             {
                 Aeroforces[0] = Fxv[0] + Fxp[0];
                 Aeroforces[1] = Fyv[0] + Fyp[0];
-                Aeroforces[2] = bf_drag_t + bf_drag_p + bfgrad_drag_t + bfgrad_drag_p;
-                Aeroforces[3] = bf_lift_t + bf_lift_p + bfgrad_lift_t + bfgrad_lift_p;
+                Aeroforces[2] = Mzv[0] + Mzp[0];
+                Aeroforces[3] = bf_drag_t + bf_drag_p + bfgrad_drag_t + bfgrad_drag_p;
+                Aeroforces[4] = bf_lift_t + bf_lift_p + bfgrad_lift_t + bfgrad_lift_p;
+                
+                Array<OneD, NekDouble> Torques(3);
+  	      Torques[0] = Mzp[0];
+  	      Torques[1] = Mzv[0];
+  	      Torques[2] = Mzp[0] + Mzv[0] ;     
+    
+               SolverUtils::FilterAeroForces::GetTotForces(Torques);
+
+
+                //cout << "Aeroforces[2] = " << Aeroforces[2] << endl;//", bf_lift_t = " << bf_lift_t << ", bf_lift_p = " << bf_lift_p << ", bfgrad_lift_t = " << bfgrad_lift_t << " e bfgrad_lift_p = " << bfgrad_lift_p << endl;
+                
+                
+                
+
+               
                
                 
             }
@@ -1494,18 +1528,19 @@ void FilterMovingBody::UpdateForce(
                 Aeroforces[0] = Fxv[0] + Fxp[0];
                 Aeroforces[1] = Fyv[0] + Fyp[0];
                 Aeroforces[2] = Mzv[0] + Mzp[0];
+                
+                Array<OneD, NekDouble> Torques(3);
+  	      Torques[0] = Mzp[0];
+  	      Torques[1] = Mzv[0];
+  	      Torques[2] = Mzp[0] + Mzv[0] ;     
+    
+               SolverUtils::FilterAeroForces::GetTotForces(Torques);
+               
             }
             
 
         }
-    Array<OneD, NekDouble> Torques(3);
-    Torques[0] = Mzp[0];
-    Torques[1] = Mzv[0];
-    Torques[2] = Mzp[0] + Mzv[0] ; 
-    
-    
-    
-    SolverUtils::FilterAeroForces::GetTotForces(Torques);
+
     
 
     }

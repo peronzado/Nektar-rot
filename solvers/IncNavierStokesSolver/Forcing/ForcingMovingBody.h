@@ -176,6 +176,7 @@ class ForcingMovingBody : public SolverUtils::Forcing
         Array<OneD, Array< OneD, NekDouble> > m_delta;
         
         Array<OneD, Array<OneD, NekDouble> >  m_baseflow;
+        Array<OneD, Array<OneD, NekDouble> >  m_grad;
         Array<OneD, Array< OneD, NekDouble> > forces_vel;
         Array<OneD, Array< OneD, NekDouble> > m_force;
         Array<OneD, Array< OneD, NekDouble> > m_force1;
