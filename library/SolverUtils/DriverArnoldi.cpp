@@ -53,7 +53,8 @@ DriverArnoldi::DriverArnoldi(
     m_session->LoadParameter("IO_InfoSteps", m_infosteps, 1);
 }
 
-
+int c01;
+Array<OneD, NekDouble> m_y1(2);
 /**
  * Destructor
  */
@@ -110,6 +111,8 @@ void DriverArnoldi::v_InitObject(ostream &out)
 
     m_session->LoadParameter("imagShift",m_imagShift,0.0);
 
+    m_y1[0] = 0.;
+    m_y1[1] = 0.;
     // The imaginary shift is applied at system assembly
     // Only if using HOMOGENEOUS expansion and ModeType set to SingleMode
     if(m_imagShift != 0.0)
@@ -179,6 +182,7 @@ void DriverArnoldi::ArnoldiSummary(std::ostream &out)
  */
 void DriverArnoldi::CopyArnoldiArrayToField(Array<OneD, NekDouble> &array)
 {
+    c01 = 0;
 
     Array<OneD, MultiRegions::ExpListSharedPtr>& fields = m_equ[0]->UpdateFields();
     int nq = fields[0]->GetNcoeffs();
@@ -188,6 +192,11 @@ void DriverArnoldi::CopyArnoldiArrayToField(Array<OneD, NekDouble> &array)
         Vmath::Vcopy(nq, &array[k*nq], 1, &fields[k]->UpdateCoeffs()[0], 1);
         fields[k]->SetPhysState(false);
     }
+    m_y1[0] = array[nq*m_nfields];
+    m_y1[1] = array[m_nfields*nq+1];
+    //cout<< "disp: "<< m_y1[0] << ", vel: " << m_y1[1] << endl;
+    
+
 }
 
 /**
@@ -210,15 +219,38 @@ void DriverArnoldi::CopyFieldToArnoldiArray(Array<OneD, NekDouble> &array)
     {
         fields = m_equ[m_nequ-1]->UpdateFields();
     }
-
+    
+    int nq = fields[0]->GetNcoeffs();
     for (int k = 0; k < m_nfields; ++k)
     {
-        int nq = fields[0]->GetNcoeffs();
         Vmath::Vcopy(nq,  &fields[k]->GetCoeffs()[0], 1, &array[k*nq], 1);
+        // Vmath::Sadd(nq, m_y0[k], &array[(k+2)*nq], 1, &array[(k+2)*nq], 1);
         fields[k]->SetPhysState(false);
 
+        // cout << "array size: " << array.size() << ", nq: " << m_nfields*nq << endl;
+
     }
+    //Array<OneD, NekDouble> tmp1(nq, m_y1[0]);
+    //Array<OneD, NekDouble> tmp2(nq, m_y1[1]);
+    
+    //Vmath::Vcopy(nq, &tmp1[0], 1, &array[m_nfields*nq], 1);
+    //Vmath::Vcopy(nq, &tmp2[0], 1, &array[(m_nfields+1)*nq], 1);
+    
+    array[m_nfields*nq]   = m_y1[0];
+    array[m_nfields*nq+1] = m_y1[1]; 
+    
+    
+    
+    
+
+    //array[m_nfields*nq]   = m_y0[0];
+    //array[m_nfields*nq+1] = m_y0[1];    
+    //cout<< "/n disphat: "<< m_y0[0] << "/n, velhat: " << m_y0[1] << endl; 
+    //m_y0[0] = 0.;
+    //m_y0[1] = 0.;
+    //Vmath::Zero(2, m_y1, 1);
 }
+
 
 
 /**
@@ -265,6 +297,10 @@ void DriverArnoldi::WriteFld(std::string file, Array<OneD, NekDouble> coeffs)
 
     int ncoeffs = m_equ[0]->UpdateFields()[0]->GetNcoeffs();
     ASSERTL1(coeffs.size() >= ncoeffs*m_nfields,"coeffs is not of sufficient size");
+    
+   int ntot = coeffs.size();
+   Array<OneD, MultiRegions::ExpListSharedPtr>& fields = m_equ[0]->UpdateFields();
+   int nqtot = fields[0]->GetNcoeffs();
 
     for(int i = 0; i < m_nfields; ++i)
     {
@@ -273,6 +309,10 @@ void DriverArnoldi::WriteFld(std::string file, Array<OneD, NekDouble> coeffs)
     }
 
     m_equ[0]->WriteFld(file,m_equ[0]->UpdateFields()[0], fieldcoeffs, variables);
+    
+
+    cout<< "disp: "<< coeffs[m_nfields*nqtot] << ", vel: " << coeffs[m_nfields*nqtot+1] << endl;
+    cout<< "dispprevious: "<< coeffs[ntot-2] << ", velprevious: " << coeffs[ntot-1] << endl;
 }
 
 void DriverArnoldi::WriteEvs(
@@ -331,5 +371,17 @@ void DriverArnoldi::WriteEvs(
     }
 }
 
+void DriverArnoldi::ReturnStructVector(NekDouble & y, NekDouble& y1, int& c)
+{
+    y  = m_y1[0];
+    y1 = m_y1[1];
+    c  = 0;
+}
+
+void DriverArnoldi::GetStructVector(NekDouble y, NekDouble y1)
+{
+    m_y1[0] = y;
+    m_y1[1] = y1;
+}
 }
 }

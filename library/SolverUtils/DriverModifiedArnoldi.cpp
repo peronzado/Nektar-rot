@@ -52,8 +52,8 @@ string DriverModifiedArnoldi::className =
 string DriverModifiedArnoldi::driverLookupId =
         LibUtilities::SessionReader::RegisterEnumValue("Driver",
                                     "ModifiedArnoldi",0);
-int c0;
-Array<OneD, NekDouble> m_y(2);
+// int c0;
+// Array<OneD, NekDouble> m_y(2);
 /**
  *
  */
@@ -97,8 +97,7 @@ void DriverModifiedArnoldi::v_InitObject(ostream &out)
 
     //FwdTrans Initial conditions to be in Coefficient Space
     m_equ[m_nequ-1] ->TransPhysToCoeff();
-    m_y[0] = 0.;
-    m_y[1] = 0.;
+
   
 }
 
@@ -163,10 +162,7 @@ void DriverModifiedArnoldi::v_Execute(ostream &out)
     // Perform one iteration to enforce boundary conditions.
     // Set this as the initial value in the sequence.
     EV_update(Kseq[1], Kseq[0]);
-    // Getting the structure vector
-    Kseq[0][ntot-2] = m_y[0];
-    Kseq[0][ntot-1] = m_y[1];
-    Vmath::Zero(2, m_y, 1);
+
     if (m_comm->GetRank() == 0)
     {
         out << "Iteration: " << 0 <<  endl;
@@ -182,16 +178,13 @@ void DriverModifiedArnoldi::v_Execute(ostream &out)
     NekDouble resid0;
     for (i = 1; !converged && i <= m_kdim; ++i)
     {
-        
-        m_y[0] = Kseq[i-1][ntot-2];
-        m_y[1] = Kseq[i-1][ntot-1];
-        cout << Kseq[i-1][ntot-2] << endl;
-        cout << Kseq[i-1][ntot-1] << endl;
+ 
         // Compute next vector
         EV_update(Kseq[i-1], Kseq[i]);
-        Kseq[i][ntot-2] = m_y[0];
-        Kseq[i][ntot-1] = m_y[1];
-        Vmath::Zero(2, m_y, 1);
+        //cout << "Modified Arnoldi: " <<Kseq[i][ntot-2] << endl;
+        //cout << "Modified Arnoldi: " <<Kseq[i][ntot-1] << endl;
+
+
         // Normalise
         alpha[i] = Blas::Ddot(ntot, &Kseq[i][0], 1, &Kseq[i][0], 1);
         m_comm->AllReduce(alpha[i], Nektar::LibUtilities::ReduceSum);
@@ -241,13 +234,12 @@ void DriverModifiedArnoldi::v_Execute(ostream &out)
                 alpha[j-1] = alpha[j];
                 Vmath::Vcopy(ntot, Kseq[j], 1, Kseq[j-1], 1);
             }
-            m_y[0] = Kseq[m_kdim - 1][ntot-2];
-            m_y[1] = Kseq[m_kdim - 1][ntot-1];
+           
             // Compute next vector
             EV_update(Kseq[m_kdim - 1], Kseq[m_kdim]);
-            Kseq[m_kdim][ntot-2] = m_y[0];
-            Kseq[m_kdim][ntot-1] = m_y[1];
-            Vmath::Zero(2, m_y, 1);
+            // Kseq[m_kdim][ntot-2] = m_y[0];
+            // Kseq[m_kdim][ntot-1] = m_y[1];
+            // Vmath::Zero(2, m_y, 1);
             // Compute new scale factor
             alpha[m_kdim] = Blas::Ddot(ntot, &Kseq[m_kdim][0], 1,
                                              &Kseq[m_kdim][0], 1);
@@ -325,7 +317,7 @@ void DriverModifiedArnoldi::EV_update(
     Array<OneD, NekDouble> &src,
     Array<OneD, NekDouble> &tgt)
 {
-    c0=0;
+    // c0=0;
     // Copy starting vector into first sequence element.
     CopyArnoldiArrayToField(src);
     m_equ[0]->TransCoeffToPhys();
@@ -335,7 +327,7 @@ void DriverModifiedArnoldi::EV_update(
     
     if(m_EvolutionOperator == eTransientGrowth)
     {
-        c0=1;
+        // c0=1;
         Array<OneD, MultiRegions::ExpListSharedPtr> fields;
         fields = m_equ[0]->UpdateFields();
 
@@ -562,8 +554,9 @@ void DriverModifiedArnoldi::EV_post(
                 WriteEvs(cout, j, wr[j], wi[j]);
             }
             WriteFld(file,Kseq[j]);
-            cout << Kseq[j][ntot-2] << endl;
-            cout << Kseq[j][ntot-1] << endl;
+            
+            cout<< "disp: " << Kseq[j][ntot-2] << "; vel: " << Kseq[j][ntot-1] << endl;
+      
         }
         
     }
@@ -626,19 +619,6 @@ void DriverModifiedArnoldi::EV_big(
             i++;
         }
     }
-}
-
-void DriverModifiedArnoldi::ReturnStructVector(NekDouble & y, NekDouble& y1, int& c)
-{
-    y  = m_y[0];
-    y1 = m_y[1];
-    c  = c0;
-}
-
-void DriverModifiedArnoldi::GetStructVector(NekDouble y, NekDouble y1)
-{
-    m_y[0] = y;
-    m_y[1] = y1;
 }
 
 }

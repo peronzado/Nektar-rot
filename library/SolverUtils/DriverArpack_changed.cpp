@@ -121,7 +121,8 @@ void DriverArpack::v_Execute(ostream &out)
     Array<OneD, NekDouble> tmpworkd;
 
     int nq     = m_equ[0]->UpdateFields()[0]->GetNcoeffs(); // Number of points in the mesh
-    int n      = m_nfields*nq+2;    // Number of points in eigenvalue calculation
+    int ntot      = m_nfields*nq;    // Number of points in eigenvalue calculation (vectorial fields)
+    int n      = m_nfields*nq+2;    // Number of points in eigenvalue calculation (total eigenvalues, vectorial plus disp and vel)
     int lworkl = 3*m_kdim*(m_kdim+2); // Size of work array
     int ido ;     //REVERSE COMMUNICATION parameter. At the first call must be initialised at 0
     int info;     // do not set initial vector (info=0 random initial vector, info=1 read initial vector from session file)
@@ -139,7 +140,7 @@ void DriverArpack::v_Execute(ostream &out)
     Array<OneD, NekDouble> resid(n);
     Array<OneD, NekDouble> v(n*m_kdim);
     Array<OneD, NekDouble> workl(lworkl, 0.0);
-    Array<OneD, NekDouble> workd(3*n, 0.0);
+    Array<OneD, NekDouble> workd(3*ntot+2, 0.0);
 
     ASSERTL0(n <= m_maxn,  "N is greater than   MAXN");
 

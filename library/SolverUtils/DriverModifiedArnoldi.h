@@ -58,9 +58,8 @@ class DriverModifiedArnoldi: public DriverArnoldi
             p->InitObject();
             return p;
         }
-        static void ReturnStructVector(NekDouble& y, NekDouble& y1, int& c);
-        static void GetStructVector(NekDouble y, NekDouble y1);
-        ///Name of the class
+        
+        // ///Name of the class
         static std::string className;
 
     protected:
