@@ -74,8 +74,6 @@ public:
               Array<OneD, NekDouble> &Aeroforces,
         const NekDouble &time);
     static void GetTotForces(Array<OneD, NekDouble> &Hydroforces);
-    
-    
 
 protected:
     virtual void v_Initialise(
@@ -118,9 +116,6 @@ private:
     Array<OneD, Array<OneD, NekDouble> >    m_Fpplane;
     Array<OneD, Array<OneD, NekDouble> >    m_Fvplane;
     Array<OneD, Array<OneD, NekDouble> >    m_Ftplane;
-    
-    
-        
 
     NekDouble                       m_lastTime;
     GlobalMapping::MappingSharedPtr m_mapping;
@@ -128,13 +123,6 @@ private:
     void CalculateForces(
         const Array<OneD, const MultiRegions::ExpListSharedPtr> &pFields,
         const NekDouble &time);
-        
-    
-    
-    
-    
-    //void Nektar::SolverUtils::FilterAeroForces::InputTorque(const NekDouble& Mzp, const NekDouble& Mzv, const NekDouble& Aeroforces2);
-
 
     void CalculateForcesMapping(
         const Array<OneD, const MultiRegions::ExpListSharedPtr> &pFields,
